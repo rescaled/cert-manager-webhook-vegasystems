@@ -1,0 +1,123 @@
+---
+# Allow cert-manager to call the webhook's APIService for SubjectAccessReview / TokenReview.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "webhook.fullname" . }}:auth-delegator
+  labels:
+    {{- include "webhook.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - apiGroup: ""
+    kind: ServiceAccount
+    name: {{ include "webhook.fullname" . }}
+    namespace: {{ .Release.Namespace }}
+---
+# Allow the webhook to read the extension-apiserver-authentication ConfigMap.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "webhook.fullname" . }}:auth-reader
+  namespace: kube-system
+  labels:
+    {{- include "webhook.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: extension-apiserver-authentication-reader
+subjects:
+  - apiGroup: ""
+    kind: ServiceAccount
+    name: {{ include "webhook.fullname" . }}
+    namespace: {{ .Release.Namespace }}
+---
+# Read VegaSystems API credentials referenced from Issuer/ClusterIssuer configs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "webhook.fullname" . }}:secret-reader
+  labels:
+    {{- include "webhook.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "webhook.fullname" . }}:secret-reader
+  labels:
+    {{- include "webhook.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "webhook.fullname" . }}:secret-reader
+subjects:
+  - apiGroup: ""
+    kind: ServiceAccount
+    name: {{ include "webhook.fullname" . }}
+    namespace: {{ .Release.Namespace }}
+---
+# Allow cert-manager controller to call the webhook's solver subresources.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "webhook.fullname" . }}:domain-solver
+  labels:
+    {{- include "webhook.labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - {{ .Values.groupName }}
+    resources:
+      - "*"
+    verbs:
+      - "create"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "webhook.fullname" . }}:domain-solver
+  labels:
+    {{- include "webhook.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "webhook.fullname" . }}:domain-solver
+subjects:
+  - apiGroup: ""
+    kind: ServiceAccount
+    name: {{ .Values.certManager.serviceAccountName }}
+    namespace: {{ .Values.certManager.namespace }}
+---
+# Aggregated apiservers must allow the FlowSchema/PriorityLevelConfiguration
+# discovery loop performed by kube-apiserver.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "webhook.fullname" . }}:flowcontrol-solver
+  labels:
+    {{- include "webhook.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["flowcontrol.apiserver.k8s.io"]
+    resources: ["prioritylevelconfigurations", "flowschemas"]
+    verbs: ["list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "webhook.fullname" . }}:flowcontrol-solver
+  labels:
+    {{- include "webhook.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "webhook.fullname" . }}:flowcontrol-solver
+subjects:
+  - apiGroup: ""
+    kind: ServiceAccount
+    name: {{ include "webhook.fullname" . }}
+    namespace: {{ .Release.Namespace }}

@@ -1,0 +1,57 @@
+---
+# A self-signed Issuer used to bootstrap a CA for the webhook serving cert.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ include "webhook.selfSignedIssuer" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "webhook.labels" . | nindent 4 }}
+spec:
+  selfSigned: {}
+---
+# CA certificate (the chart's own CA) signed by the self-signed Issuer.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "webhook.rootCACertificate" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "webhook.labels" . | nindent 4 }}
+spec:
+  secretName: {{ include "webhook.rootCACertificate" . }}
+  duration: 43800h # 5y
+  issuerRef:
+    name: {{ include "webhook.selfSignedIssuer" . }}
+  commonName: "ca.cert-manager-webhook-vegasystems.cert-manager"
+  isCA: true
+---
+# Issuer that uses the chart's CA to sign the webhook serving cert.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ include "webhook.rootCAIssuer" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "webhook.labels" . | nindent 4 }}
+spec:
+  ca:
+    secretName: {{ include "webhook.rootCACertificate" . }}
+---
+# Webhook serving cert.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "webhook.servingCertificate" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "webhook.labels" . | nindent 4 }}
+spec:
+  secretName: {{ include "webhook.servingCertificate" . }}
+  duration: 8760h # 1y
+  issuerRef:
+    name: {{ include "webhook.rootCAIssuer" . }}
+  dnsNames:
+    - {{ include "webhook.fullname" . }}
+    - {{ include "webhook.fullname" . }}.{{ .Release.Namespace }}
+    - {{ include "webhook.fullname" . }}.{{ .Release.Namespace }}.svc

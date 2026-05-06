@@ -1,0 +1,12 @@
+.git
+.github
+.idea
+bin
+dist
+deploy
+example
+testdata
+*.md
+LICENSE
+Makefile
+script.pl

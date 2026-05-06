@@ -1,0 +1,23 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    ":separateMajorReleases"
+  ],
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions"
+    },
+    {
+      "matchPackagePatterns": ["^k8s.io/", "^sigs.k8s.io/"],
+      "groupName": "kubernetes"
+    },
+    {
+      "matchPackageNames": ["github.com/cert-manager/cert-manager"],
+      "groupName": "cert-manager"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+apiVersion: v2
+name: cert-manager-webhook-vegasystems
+description: cert-manager ACME DNS01 webhook solver for VegaSystems
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - cert-manager
+  - acme
+  - dns01
+  - vegasystems
+home: https://github.com/rescaled/cert-manager-webhook-vegasystems
+sources:
+  - https://github.com/rescaled/cert-manager-webhook-vegasystems
+maintainers:
+  - name: rescaled GmbH
+    email: info@rescaled.com
