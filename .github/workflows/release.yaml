@@ -46,10 +46,20 @@ jobs:
       - uses: azure/setup-helm@v4
         with:
           version: latest
+      - name: Derive chart version
+        id: ver
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
       - name: Package chart
         run: |
           mkdir -p dist
-          helm package deploy/cert-manager-webhook-vegasystems -d dist/
+          helm package deploy/cert-manager-webhook-vegasystems \
+            --version "${{ steps.ver.outputs.version }}" \
+            --app-version "${{ steps.ver.outputs.version }}" \
+            -d dist/
+      - name: Login to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Push chart to GHCR
+        run: helm push dist/*.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*.tgz
