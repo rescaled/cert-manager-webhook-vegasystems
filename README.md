@@ -14,7 +14,7 @@ cert-manager calls the webhook for each ACME challenge:
 
 | Step    | Webhook action                                                                |
 |---------|-------------------------------------------------------------------------------|
-| Present | Look up the domain ID, then `POST` (well, `GET …mode=create`) a `TXT` record  |
+| Present | Look up the domain ID, then `POST` (well, `GET mode=create`) a `TXT` record  |
 | CleanUp | List records, delete the `TXT` whose value matches `ch.Key`                   |
 
 ## Installation
@@ -31,7 +31,7 @@ cert-manager calls the webhook for each ACME challenge:
 ```sh
 helm install cert-manager-webhook-vegasystems \
   oci://ghcr.io/servinga/cert-manager-webhook-vegasystems \
-  --version 0.1.0 \
+  --version v0.1-beta \
   -n cert-manager
 ```
 
