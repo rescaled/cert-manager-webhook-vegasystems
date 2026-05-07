@@ -30,8 +30,8 @@ cert-manager calls the webhook for each ACME challenge:
 
 ```sh
 helm install cert-manager-webhook-vegasystems \
-  oci://ghcr.io/rescaled/cert-manager-webhook-vegasystems \
-  --version v0.1-beta \
+  oci://ghcr.io/rescaled/charts/cert-manager-webhook-vegasystems \
+  --version 0.1.0-beta \
   -n cert-manager
 ```
 
