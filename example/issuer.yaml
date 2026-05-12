@@ -5,7 +5,7 @@ metadata:
 spec:
   acme:
     server: https://acme-v02.api.letsencrypt.org/directory
-    email: th@servinga.com
+    email: test@example.com
     privateKeySecretRef:
       name: letsencrypt-vegasystems-account
     solvers:
@@ -16,8 +16,9 @@ spec:
             config:
               # Customer ID issued by VegaSystems for your account.
               customerId: 12345
-              # ttl is optional; default is 120 (seconds).
-              ttl: 120
+              # ttl is optional; default is 300 (seconds), which is also the
+              # API-enforced minimum. Lower values are rejected.
+              ttl: 300
               apiUserSecretRef:
                 name: vegasystems-credentials
                 key: apiUser
