@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -21,7 +22,13 @@ import (
 	"cert-manager-webhook-vegasystems/vegasystems"
 )
 
-const defaultTTL = 120
+const (
+	// defaultTTL matches the lowest TTL the upstream VegaSystems API accepts
+	// (300 seconds / 5 minutes). Lower values are rejected with a validation
+	// error at create time.
+	defaultTTL = 300
+	opTimeout  = 30 * time.Second
+)
 
 var GroupName = os.Getenv("GROUP_NAME")
 
@@ -33,8 +40,17 @@ func main() {
 }
 
 type solver struct {
-	kube *kubernetes.Clientset
+	kube kubernetes.Interface
 	http *http.Client
+	ctx  context.Context
+}
+
+func (s *solver) opContext() (context.Context, context.CancelFunc) {
+	base := s.ctx
+	if base == nil {
+		base = context.Background()
+	}
+	return context.WithTimeout(base, opTimeout)
 }
 
 type providerConfig struct {
@@ -47,26 +63,35 @@ type providerConfig struct {
 
 func (s *solver) Name() string { return "vegasystems" }
 
-func (s *solver) Initialize(kubeClientConfig *rest.Config, _ <-chan struct{}) error {
+func (s *solver) Initialize(kubeClientConfig *rest.Config, stopCh <-chan struct{}) error {
 	cl, err := kubernetes.NewForConfig(kubeClientConfig)
 	if err != nil {
 		return fmt.Errorf("build kubernetes client: %w", err)
 	}
 	s.kube = cl
 	s.http = &http.Client{Timeout: 30 * time.Second}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-stopCh
+		cancel()
+	}()
+	s.ctx = ctx
 	return nil
 }
 
 func (s *solver) Present(ch *v1alpha1.ChallengeRequest) error {
-	cfg, client, zone, name, err := s.prepare(ch)
+	ctx, cancel := s.opContext()
+	defer cancel()
+	cfg, client, zone, name, err := s.prepare(ctx, ch)
 	if err != nil {
 		return err
 	}
-	domID, err := client.FindDomainID(zone, cfg.CustomerID)
+	domID, err := client.FindDomainID(ctx, zone, cfg.CustomerID)
 	if err != nil {
 		return err
 	}
-	existing, err := client.ListRecords(domID)
+	existing, err := client.ListRecords(ctx, domID)
 	if err != nil {
 		return err
 	}
@@ -79,46 +104,49 @@ func (s *solver) Present(ch *v1alpha1.ChallengeRequest) error {
 	if ttl <= 0 {
 		ttl = defaultTTL
 	}
-	return client.CreateRecord(domID, name, "TXT", ttl, ch.Key)
+	return client.CreateRecord(ctx, domID, name, "TXT", ttl, ch.Key)
 }
 
 func (s *solver) CleanUp(ch *v1alpha1.ChallengeRequest) error {
-	cfg, client, zone, name, err := s.prepare(ch)
+	ctx, cancel := s.opContext()
+	defer cancel()
+	cfg, client, zone, name, err := s.prepare(ctx, ch)
 	if err != nil {
 		return err
 	}
-	domID, err := client.FindDomainID(zone, cfg.CustomerID)
+	domID, err := client.FindDomainID(ctx, zone, cfg.CustomerID)
 	if err != nil {
 		return err
 	}
-	records, err := client.ListRecords(domID)
+	records, err := client.ListRecords(ctx, domID)
 	if err != nil {
 		return err
 	}
+	var errs []error
 	for _, r := range records {
 		if r.Type == "TXT" && r.Name == name && r.Value == ch.Key {
-			if err := client.DeleteRecord(domID, r.RecordID()); err != nil {
-				return err
+			if err := client.DeleteRecord(ctx, domID, r.RecordID()); err != nil {
+				errs = append(errs, fmt.Errorf("delete record %s: %w", r.RecordID(), err))
 			}
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
-func (s *solver) prepare(ch *v1alpha1.ChallengeRequest) (providerConfig, *vegasystems.Client, string, string, error) {
+func (s *solver) prepare(ctx context.Context, ch *v1alpha1.ChallengeRequest) (providerConfig, *vegasystems.Client, string, string, error) {
 	cfg, err := loadConfig(ch.Config)
 	if err != nil {
 		return cfg, nil, "", "", err
 	}
-	if cfg.CustomerID == 0 {
-		return cfg, nil, "", "", fmt.Errorf("customerId is required in webhook config")
+	if cfg.CustomerID <= 0 {
+		return cfg, nil, "", "", fmt.Errorf("customerId must be a positive integer")
 	}
 
-	user, err := s.resolveSecret(ch.ResourceNamespace, cfg.APIUserSecretRef, "apiUserSecretRef")
+	user, err := s.resolveSecret(ctx, ch.ResourceNamespace, cfg.APIUserSecretRef, "apiUserSecretRef")
 	if err != nil {
 		return cfg, nil, "", "", err
 	}
-	key, err := s.resolveSecret(ch.ResourceNamespace, cfg.APIKeySecretRef, "apiKeySecretRef")
+	key, err := s.resolveSecret(ctx, ch.ResourceNamespace, cfg.APIKeySecretRef, "apiKeySecretRef")
 	if err != nil {
 		return cfg, nil, "", "", err
 	}
@@ -136,7 +164,7 @@ func (s *solver) prepare(ch *v1alpha1.ChallengeRequest) (providerConfig, *vegasy
 	return cfg, client, zone, name, nil
 }
 
-func (s *solver) resolveSecret(namespace string, sel cmmeta.SecretKeySelector, fieldName string) (string, error) {
+func (s *solver) resolveSecret(ctx context.Context, namespace string, sel cmmeta.SecretKeySelector, fieldName string) (string, error) {
 	if sel.Name == "" {
 		return "", fmt.Errorf("%s.name is required", fieldName)
 	}
@@ -146,7 +174,7 @@ func (s *solver) resolveSecret(namespace string, sel cmmeta.SecretKeySelector, f
 	if s.kube == nil {
 		return "", fmt.Errorf("kubernetes client not initialised")
 	}
-	secret, err := s.kube.CoreV1().Secrets(namespace).Get(context.Background(), sel.Name, metav1.GetOptions{})
+	secret, err := s.kube.CoreV1().Secrets(namespace).Get(ctx, sel.Name, metav1.GetOptions{})
 	if err != nil {
 		return "", fmt.Errorf("get secret %s/%s: %w", namespace, sel.Name, err)
 	}

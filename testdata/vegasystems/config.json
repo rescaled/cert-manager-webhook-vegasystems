@@ -1,6 +1,6 @@
 {
   "customerId": 12345,
-  "ttl": 120,
+  "ttl": 300,
   "apiUserSecretRef": {
     "name": "vegasystems-credentials",
     "key": "apiUser"
