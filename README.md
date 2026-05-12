@@ -71,7 +71,7 @@ The `webhook.config` block accepts:
 | `customerId`       | int    | yes      | —       | VegaSystems customer ID                      |
 | `apiUserSecretRef` | object | yes      | —       | `{name, key}` pointing at the API user value |
 | `apiKeySecretRef`  | object | yes      | —       | `{name, key}` pointing at the API key value  |
-| `ttl`              | int    | no       | `120`   | TTL of the TXT record in seconds             |
+| `ttl`              | int    | no       | `300`   | TTL of the TXT record in seconds (API minimum is 300) |
 | `baseURL`          | string | no       | upstream API | Override for testing                    |
 
 ## Development
